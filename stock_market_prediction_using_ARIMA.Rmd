@@ -1,0 +1,194 @@
+---
+title: "STOCK MARKET PREDICTION USING ARIMA"
+author: "Gowtham Krishnaswamy"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(timeSeries)
+#library(tidyverse)
+#library(fPortfolio)
+library(PerformanceAnalytics)
+library(quantmod)
+#library(caTools)   # to split the data into test and train sets
+#library(dplyr)
+library(ggplot2)
+#library(PortfolioAnalytics)
+```
+
+
+```{r}
+library(tidyquant)
+library(dplyr)
+library(magrittr)
+#Load 20 years of stock data using 'GSPC'
+stock_data <- tq_get(c("^GSPC"), get = "stock.prices", from = "1999-03-01", to = "2019-03-01")
+
+#Calculating Monthly Returns from the raw data
+stock_returns_monthly <- stock_data %>% group_by("^GSPC") %>% tq_transmute(select = adjusted, mutate_fun = to_period, period = "months")
+
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(data = stock_data, aes(x = date, y = adjusted )) + geom_line()
+
+ggplot(data = stock_returns_monthly, aes(x = date, y = adjusted )) + geom_line()
+
+```
+
+```{r}
+#Time Series Analysis
+stock_ts <- ts(stock_returns_monthly$adjusted, start = c(1999,3), freq = 12)
+
+library(ggfortify)
+autoplot(stock_ts)
+
+stock_data_train <- ts(stock_ts, start=c(1999, 3), end=c(2016, 12), freq=12)
+
+```
+
+
+```{r}
+#Test for Stationarity
+
+#Box Ljung test
+Box.test(stock_data_train, lag = 20, type = 'Ljung-Box')
+
+
+#Augmented Dickey-Fuller Test
+library(tseries)
+adf.test(stock_data_train)
+
+```
+
+```{r}
+#Decomposing the time series to check Trends, Sesonality, Randomness
+stock_decompose <- decompose(stock_data_train, "additive")
+plot(stock_decompose)
+
+```
+
+```{r}
+#ACF - AutoCorrelation Function
+acf(stock_data_train)
+
+#PACF - Partial AutoCorrelation Function
+pacf(stock_data_train)
+
+```
+
+```{r}
+
+# Making the data stationary
+stock_diff <- diff(stock_data_train,diff=1)
+acf(stock_diff)
+```
+
+```{r}
+# Rechecking using the same tests
+
+#Box Ljung test
+Box.test(stock_diff, lag = 20, type = 'Ljung-Box')
+
+#Augment Dickey-Fuller test
+adf.test(stock_diff)
+```
+
+```{r}
+acf(stock_diff)
+pacf(stock_diff)
+```
+
+```{r}
+#ARIMA model
+library(forecast)
+
+plot(stock_ts)
+
+a<-auto.arima(stock_data_train,D=1,trace=TRUE)
+a
+
+model_a <- Arima(stock_data_train, order = c(0,1,2),seasonal = list(order = c(2,1,1), period = 12))
+summary(model_a)
+
+stock_predict_a <- forecast(model_a, h = 24)
+plot(stock_predict_a)
+
+
+b<-auto.arima(stock_data_train,trace=TRUE)
+b
+
+model_b <- Arima(stock_data_train, order = c(1,1,0),seasonal = list(order = c(2,0,0), period = 12))
+summary(model_b)
+
+stock_predict_b <- forecast(model_b, h = 24)
+plot(stock_predict_b)
+
+```
+
+
+```{r}
+stock_decompose_stl <- stl(stock_data_train, s.window = "periodic")
+plot(stock_decompose_stl)
+stock_decompose_stl_deseasonal <- seasadj(stock_decompose_stl)
+plot(stock_decompose_stl)
+
+fit <- auto.arima(stock_decompose_stl_deseasonal, seasonal = FALSE)
+tsdisplay(residuals(fit), lag.max = 45)
+```
+
+
+```{r}
+test_data <- ts(stock_ts, start=c(2017, 1), end=c(2019, 3), freq=12)
+
+#Mean method
+accuracy(meanf(stock_data_train, h = 24), test_data)
+```
+
+```{r}
+
+#Naive Method
+accuracy(rwf(stock_data_train, h = 24), test_data)
+
+```
+
+```{r}
+accuracy(rwf(stock_data_train, drift = TRUE, h = 24), test_data)
+
+```
+
+```{r}
+accuracy(snaive(stock_data_train, h=24), test_data)
+
+plot(test_data, main="Test Data - 2017-2019", xlab = "Months" )
+
+train.mean <- meanf(stock_data_train, h = 24)$mean
+train.naive <- rwf(stock_data_train, h = 24)$mean 
+train.drift <- rwf(stock_data_train, drift = TRUE, h = 24)$mean
+train.seas <- snaive(stock_data_train, h = 24)$mean
+
+    lines(train.mean, col=4)
+    lines(train.naive, col=2)
+    lines(train.drift, col=3)
+    lines(train.seas, col=5)
+    
+    legend("topleft", lty=1, col=c(4,2,3,5), legend=c("Mean method","Naive method","Drift method", "Seasonal naive method"),bty="n")
+    
+```
+
+```{r}
+plot(forecast(auto.arima(stock_data_train , D = 1), h = 24))
+
+lines(test_data, col = "red")
+ggplot(data = stock_returns_monthly, aes(x = date, y = adjusted )) + geom_line()
+
+
+```
