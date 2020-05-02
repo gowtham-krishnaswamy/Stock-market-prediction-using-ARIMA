@@ -1,7 +1,8 @@
 ---
 title: "STOCK MARKET PREDICTION USING ARIMA"
 author: "Gowtham Krishnaswamy"
-output: html_document
+output:
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
